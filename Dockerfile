@@ -1,4 +1,5 @@
-ARG ELIXIR_VERSION=1.14.5
+# Use 1.13.4 to match the glibc version used in the target image
+ARG ELIXIR_VERSION=1.13.4
 ARG SOURCE_COMMIT
 
 FROM elixir:${ELIXIR_VERSION} as builder
@@ -9,7 +10,7 @@ RUN apt-get update -q && apt-get --no-install-recommends install -y apt-utils ca
 
 RUN DEBIAN_CODENAME=$(sed -n 's/VERSION=.*(\(.*\)).*/\1/p' /etc/os-release) && \
     curl -q https://deb.nodesource.com/gpgkey/nodesource.gpg.key | apt-key add - && \
-    echo "deb http://deb.nodesource.com/node_12.x $DEBIAN_CODENAME main" | tee /etc/apt/sources.list.d/nodesource.list && \
+    echo "deb http://deb.nodesource.com/node_20.x $DEBIAN_CODENAME main" | tee /etc/apt/sources.list.d/nodesource.list && \
     apt-get update -q && \
     apt-get --no-install-recommends install -y nodejs
 
