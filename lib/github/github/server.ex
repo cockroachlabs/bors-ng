@@ -966,7 +966,14 @@ defmodule BorsNG.GitHub.Server do
          {"accept", content_type},
          {"user-agent", "bors-ng https://bors.tech"}
        ]},
-      {Tesla.Middleware.Retry, delay: 100, max_retries: 5}
+      {Tesla.Middleware.Retry,
+       delay: 100,
+       max_retries: 5,
+       should_retry: fn
+         {:ok, %{status: status}} when status in [404, 500, 502, 503, 504] -> true
+         {:ok, %{status: _}} -> false
+         {:error, _} -> true
+       end}
     ]
 
     middleware =
