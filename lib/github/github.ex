@@ -5,6 +5,33 @@ defmodule BorsNG.GitHub do
   Wrappers around the GitHub REST API.
   """
 
+  @doc """
+  Generic retry wrapper for GenServer calls that may timeout.
+  Retries up to 3 times with exponential backoff.
+  """
+  @spec retry_genserver_call(term, integer) :: term
+  defp retry_genserver_call(fun, retries \\ 3) when retries > 0 do
+    try do
+      fun.()
+    catch
+      :exit, {:timeout, _} ->
+        Logger.warn("GitHub API timeout, retrying (#{4 - retries}/3)")
+        # Exponential backoff: 1s, 2s, 3s
+        Process.sleep(1000 * (4 - retries))
+        retry_genserver_call(fun, retries - 1)
+    end
+  end
+
+  defp retry_genserver_call(fun, 0) do
+    try do
+      fun.()
+    catch
+      :exit, {:timeout, _} ->
+        Logger.error("GitHub API call failed after all retries")
+        raise "GitHub API timeout after retries"
+    end
+  end
+
   @typedoc """
   An authentication token;
   this may be a raw token (as on oAuth)
@@ -52,11 +79,13 @@ defmodule BorsNG.GitHub do
   @spec get_pr(tconn, integer | bitstring) ::
           {:ok, BorsNG.GitHub.Pr.t()} | {:error, term}
   def get_pr(repo_conn, pr_xref) do
-    GenServer.call(
-      BorsNG.GitHub,
-      {:get_pr, repo_conn, {pr_xref}},
-      Confex.fetch_env!(:bors, :api_github_timeout)
-    )
+    retry_genserver_call(fn ->
+      GenServer.call(
+        BorsNG.GitHub,
+        {:get_pr, repo_conn, {pr_xref}},
+        Confex.fetch_env!(:bors, :api_github_timeout)
+      )
+    end)
   end
 
   @spec update_pr_base!(tconn, BorsNG.GitHub.Pr.t()) :: BorsNG.GitHub.Pr.t()
@@ -145,21 +174,25 @@ defmodule BorsNG.GitHub do
 
   @spec push(tconn, binary, binary) :: {:ok, binary} | {:error, term, term, term}
   def push(repo_conn, sha, to) do
-    GenServer.call(
-      BorsNG.GitHub,
-      {:push, repo_conn, {sha, to}},
-      Confex.fetch_env!(:bors, :api_github_timeout)
-    )
+    retry_genserver_call(fn ->
+      GenServer.call(
+        BorsNG.GitHub,
+        {:push, repo_conn, {sha, to}},
+        Confex.fetch_env!(:bors, :api_github_timeout)
+      )
+    end)
   end
 
   @spec get_branch!(tconn, binary) :: %{commit: bitstring, tree: bitstring}
   def get_branch!(repo_conn, from) do
     {:ok, commit} =
-      GenServer.call(
-        BorsNG.GitHub,
-        {:get_branch, repo_conn, {from}},
-        Confex.fetch_env!(:bors, :api_github_timeout)
-      )
+      retry_genserver_call(fn ->
+        GenServer.call(
+          BorsNG.GitHub,
+          {:get_branch, repo_conn, {from}},
+          Confex.fetch_env!(:bors, :api_github_timeout)
+        )
+      end)
 
     commit
   end
@@ -258,11 +291,13 @@ defmodule BorsNG.GitHub do
         }
   def get_commit_status!(repo_conn, sha) do
     {:ok, status} =
-      GenServer.call(
-        BorsNG.GitHub,
-        {:get_commit_status, repo_conn, {sha}},
-        Confex.fetch_env!(:bors, :api_github_timeout)
-      )
+      retry_genserver_call(fn ->
+        GenServer.call(
+          BorsNG.GitHub,
+          {:get_commit_status, repo_conn, {sha}},
+          Confex.fetch_env!(:bors, :api_github_timeout)
+        )
+      end)
 
     status
   end
@@ -318,11 +353,13 @@ defmodule BorsNG.GitHub do
   @spec post_comment!(tconn, number, binary) :: :ok
   def post_comment!(repo_conn, number, body) do
     :ok =
-      GenServer.call(
-        BorsNG.GitHub,
-        {:post_comment, repo_conn, {number, body}},
-        Confex.fetch_env!(:bors, :api_github_timeout)
-      )
+      retry_genserver_call(fn ->
+        GenServer.call(
+          BorsNG.GitHub,
+          {:post_comment, repo_conn, {number, body}},
+          Confex.fetch_env!(:bors, :api_github_timeout)
+        )
+      end)
 
     :ok
   end
